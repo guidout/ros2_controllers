@@ -12,6 +12,13 @@ steering_controllers_library:
     read_only: true,
   }
 
+  drive_type: {
+    type: int,
+    default_value: 0,
+    description: "FWD=0, RWD=1",
+    read_only: false,
+  }
+
   rear_wheels_names: {
     type: string_array,
     description: "Names of rear wheel joints.",

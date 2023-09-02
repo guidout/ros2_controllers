@@ -86,6 +86,7 @@ controller_interface::CallbackReturn SteeringControllersLibrary::on_configure(
 {
   params_ = param_listener_->get_params();
   odometry_.set_velocity_rolling_window_size(params_.velocity_rolling_window_size);
+  odometry_.set_drive_type(params_.drive_type);
 
   configure_odometry();
 

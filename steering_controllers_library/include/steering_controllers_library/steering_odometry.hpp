@@ -31,6 +31,10 @@ namespace steering_odometry
 const unsigned int BICYCLE_CONFIG = 0;
 const unsigned int TRICYCLE_CONFIG = 1;
 const unsigned int ACKERMANN_CONFIG = 2;
+
+const unsigned int FWD = 0;
+const unsigned int RWD = 1;
+
 /**
  * \brief The Odometry class handles odometry readings
  * (2D pose and velocity with related timestamp)
@@ -138,6 +142,12 @@ public:
   void set_odometry_type(const unsigned int type);
 
   /**
+   * \brief Set drive wheels (FWD or RWD)
+   * \param drive_type FWD=0, RWD=1
+   */
+  void set_drive_type(const unsigned int drive_type);
+
+  /**
    * \brief heading getter
    * \return heading [rad]
    */
@@ -200,6 +210,8 @@ private:
    */
   bool update_odometry(const double linear_velocity, const double angular, const double dt);
 
+  bool update_odometry_v2(const double linear_velocity, const double angular, const double dt);
+
   /**
    * \brief Integrates the velocities (linear and angular) using 2nd order Runge-Kutta
    * \param linear  Linear  velocity   [m] (linear  displacement, i.e. m/s * dt) computed by
@@ -248,6 +260,7 @@ private:
 
   /// Configuration type used for the forward kinematics
   int config_type_ = -1;
+  int drive_type_ = FWD;
 
   /// Previous wheel position/state [rad]:
   double traction_wheel_old_pos_;

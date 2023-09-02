@@ -72,6 +72,39 @@ bool SteeringOdometry::update_odometry(
   return true;
 }
 
+bool SteeringOdometry::update_odometry_v2(
+  const double linear_velocity, const double angular, const double dt)
+{
+  // const double heading_old = heading_;
+  // const double r = linear / angular;
+  // heading_ += angular;
+  // x_ += r * (sin(heading_) - sin(heading_old));
+  // y_ += -r * (cos(heading_) - cos(heading_old));
+
+  const double vx = linear_velocity * std::cos(angular);
+  const double vy = linear_velocity * std::sin(angular);
+  heading_ += angular * dt;
+  x_ += vx * dt;
+  y_ += vy * dt;
+
+  
+
+  /// We cannot estimate the speed with very small time intervals:
+  if (dt < 0.0001)
+  {
+    return false;  // Interval too small to integrate with
+  }
+
+  /// Estimate speeds using a rolling mean to filter them out:
+  linear_acc_.accumulate(linear_velocity);
+  angular_acc_.accumulate(angular / dt);
+
+  linear_ = linear_acc_.getRollingMean();
+  angular_ = angular_acc_.getRollingMean();
+
+  return true;
+}
+
 bool SteeringOdometry::update_from_position(
   const double traction_wheel_pos, const double steer_pos, const double dt)
 {
@@ -169,11 +202,27 @@ bool SteeringOdometry::update_from_velocity(
   const double right_steer_pos, const double left_steer_pos, const double dt)
 {
   steer_pos_ = (right_steer_pos + left_steer_pos) * 0.5;
-  double linear_velocity =
+  double linear_velocity;
+  double angular;
+  std::cout << std::string("drive_type_: " + std::to_string(drive_type_)).c_str() << std::endl;
+  if (drive_type_==FWD) {
+    std::cout << "FWD" << std::endl;
+    double v_center_wheel = (right_traction_wheel_vel + left_traction_wheel_vel) * wheel_radius_ * 0.5;
+    linear_velocity = v_center_wheel * std::cos(steer_pos_);
+    angular = v_center_wheel * std::tan(steer_pos_) / wheelbase_;
+  }
+  else if (drive_type_==RWD) {
+    std::cout << "RWD" << std::endl;
+    linear_velocity =
     (right_traction_wheel_vel + left_traction_wheel_vel) * wheel_radius_ * 0.5;
-  const double angular = steer_pos_ * linear_velocity / wheelbase_;
+    angular = steer_pos_ * linear_velocity / wheelbase_;
+  }
+  else {
+    throw std::runtime_error("Wrong drive type. FWD=0, RWD=1.");
+  }
 
-  return update_odometry(linear_velocity, angular, dt);
+  // return update_odometry(linear_velocity, angular, dt);
+  return update_odometry_v2(linear_velocity, angular, dt);
 }
 
 void SteeringOdometry::update_open_loop(const double linear, const double angular, const double dt)
@@ -201,6 +250,8 @@ void SteeringOdometry::set_velocity_rolling_window_size(size_t velocity_rolling_
 }
 
 void SteeringOdometry::set_odometry_type(const unsigned int type) { config_type_ = type; }
+
+void SteeringOdometry::set_drive_type(const unsigned int type) { drive_type_ = type; }
 
 double SteeringOdometry::convert_trans_rot_vel_to_steering_angle(double Vx, double theta_dot)
 {
@@ -256,18 +307,15 @@ std::tuple<std::vector<double>, std::vector<double>> SteeringOdometry::get_comma
   {
     std::vector<double> traction_commands;
     std::vector<double> steering_commands;
-    if (fabs(steer_pos_) < 1e-6)
+    // if (fabs(steer_pos_) < 0.05)
+    if (fabs(alpha) < 0.05)
     {
+      // std::cout << "steer_pos_ < 0.05" << std::endl;
       traction_commands = {Ws, Ws};
       steering_commands = {alpha, alpha};
     }
     else
     {
-      double turning_radius = wheelbase_ / std::tan(steer_pos_);
-      double Wr = Ws * (turning_radius + wheel_track_ * 0.5) / turning_radius;
-      double Wl = Ws * (turning_radius - wheel_track_ * 0.5) / turning_radius;
-      traction_commands = {Wr, Wl};
-
       double numerator = 2 * wheelbase_ * std::sin(alpha);
       double denominator_first_member = 2 * wheelbase_ * std::cos(alpha);
       double denominator_second_member = wheel_track_ * std::sin(alpha);
@@ -275,9 +323,30 @@ std::tuple<std::vector<double>, std::vector<double>> SteeringOdometry::get_comma
       double alpha_r = std::atan2(numerator, denominator_first_member - denominator_second_member);
       double alpha_l = std::atan2(numerator, denominator_first_member + denominator_second_member);
       steering_commands = {alpha_r, alpha_l};
+
+      if (drive_type_==FWD) {
+        double Wr = (theta_dot * wheelbase_ / std::sin(alpha_r)) / wheel_radius_;
+        double Wl = (theta_dot * wheelbase_ / std::sin(alpha_l)) / wheel_radius_;
+        // std::cout << std::to_string(Wr) << std::endl;
+        // std::cout << std::to_string(Wl) << std::endl;
+        // std::cout << "================" << std::endl;
+        traction_commands = {Wr, Wl};
+      }
+      else if (drive_type_==RWD) {
+        double turning_radius = wheelbase_ / std::tan(steer_pos_);
+        double Wr = Ws * (turning_radius + wheel_track_ * 0.5) / turning_radius;
+        double Wl = Ws * (turning_radius - wheel_track_ * 0.5) / turning_radius;
+        traction_commands = {Wr, Wl};
+      }
+      else {
+        throw std::runtime_error("Wrong drive type. FWD=0, RWD=1.");
+      }
     }
     return std::make_tuple(traction_commands, steering_commands);
   }
+  // else if (config_type_ == ACKERMANN_DIRECT_CONFIG) {
+
+  // }
   else
   {
     throw std::runtime_error("Config not implemented");
@@ -308,7 +377,7 @@ void SteeringOdometry::integrate_runge_kutta_2(double linear, double angular)
  * \param angular
  */
 void SteeringOdometry::integrate_exact(double linear, double angular)
-{
+{  
   if (fabs(angular) < 1e-6)
   {
     integrate_runge_kutta_2(linear, angular);
