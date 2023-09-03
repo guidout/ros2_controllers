@@ -204,15 +204,15 @@ bool SteeringOdometry::update_from_velocity(
   steer_pos_ = (right_steer_pos + left_steer_pos) * 0.5;
   double linear_velocity;
   double angular;
-  std::cout << std::string("drive_type_: " + std::to_string(drive_type_)).c_str() << std::endl;
+  // std::cout << std::string("drive_type_: " + std::to_string(drive_type_)).c_str() << std::endl;
   if (drive_type_==FWD) {
-    std::cout << "FWD" << std::endl;
+    // std::cout << "FWD" << std::endl;
     double v_center_wheel = (right_traction_wheel_vel + left_traction_wheel_vel) * wheel_radius_ * 0.5;
     linear_velocity = v_center_wheel * std::cos(steer_pos_);
     angular = v_center_wheel * std::tan(steer_pos_) / wheelbase_;
   }
   else if (drive_type_==RWD) {
-    std::cout << "RWD" << std::endl;
+    // std::cout << "RWD" << std::endl;
     linear_velocity =
     (right_traction_wheel_vel + left_traction_wheel_vel) * wheel_radius_ * 0.5;
     angular = steer_pos_ * linear_velocity / wheelbase_;
