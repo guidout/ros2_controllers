@@ -81,9 +81,9 @@ bool SteeringOdometry::update_odometry_v2(
   // x_ += r * (sin(heading_) - sin(heading_old));
   // y_ += -r * (cos(heading_) - cos(heading_old));
 
-  const double vx = linear_velocity * std::cos(angular);
-  const double vy = linear_velocity * std::sin(angular);
   heading_ += angular * dt;
+  const double vx = linear_velocity * std::cos(heading_);
+  const double vy = linear_velocity * std::sin(heading_);
   x_ += vx * dt;
   y_ += vy * dt;
 
@@ -206,10 +206,35 @@ bool SteeringOdometry::update_from_velocity(
   double angular;
   // std::cout << std::string("drive_type_: " + std::to_string(drive_type_)).c_str() << std::endl;
   if (drive_type_==FWD) {
-    // std::cout << "FWD" << std::endl;
-    double v_center_wheel = (right_traction_wheel_vel + left_traction_wheel_vel) * wheel_radius_ * 0.5;
-    linear_velocity = v_center_wheel * std::cos(steer_pos_);
-    angular = v_center_wheel * std::tan(steer_pos_) / wheelbase_;
+    bool legacy_method = false;
+    if (!legacy_method) {
+      // std::cout << "FWD" << std::endl;
+      double v_center_wheel = (right_traction_wheel_vel + left_traction_wheel_vel) * wheel_radius_ * 0.5;
+      linear_velocity = v_center_wheel * std::cos(steer_pos_);
+      angular = v_center_wheel * std::sin(steer_pos_) / wheelbase_;
+      if (steer_pos_ < 0.05) {
+        linear_velocity = v_center_wheel;
+      }
+      else {
+        linear_velocity = angular * wheelbase_ / std::tan(steer_pos_);
+      }
+    }
+    else {
+      // std::cout << "doing_legacy_method" << std::endl;
+      double ctr;
+      if (steer_pos_>0.001) {
+        ctr = wheelbase_/std::tan(right_steer_pos)-wheel_track_/2;
+      }          
+      else{
+        ctr = wheelbase_/std::tan(left_steer_pos)+wheel_track_/2;
+      }
+      double center_wheel_angle = std::atan(wheelbase_/ctr);
+      double v_fl = left_traction_wheel_vel * (wheel_radius_);
+      // v_fr = self.fr_wheel_speed * (self.params['wheel_diameter']/2)
+
+      angular = v_fl / (wheelbase_ / std::sin(left_steer_pos));
+      linear_velocity = angular * wheelbase_ / std::sin(center_wheel_angle);
+    }
   }
   else if (drive_type_==RWD) {
     // std::cout << "RWD" << std::endl;
@@ -270,8 +295,10 @@ std::tuple<std::vector<double>, std::vector<double>> SteeringOdometry::get_comma
 
   if (Vx == 0 && theta_dot != 0)
   {
-    alpha = theta_dot > 0 ? M_PI_2 : -M_PI_2;
-    Ws = abs(theta_dot) * wheelbase_ / wheel_radius_;
+    // alpha = theta_dot > 0 ? M_PI_2 : -M_PI_2;
+    // Ws = abs(theta_dot) * wheelbase_ / wheel_radius_;
+    alpha = 0.;
+    Ws = 0.;
   }
   else
   {
